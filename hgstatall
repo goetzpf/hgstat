@@ -1,0 +1,13 @@
+#!/bin/bash
+
+SCRIPT_FULL_NAME=$(readlink -e $0)
+MYDIR=$(dirname $SCRIPT_FULL_NAME)
+MYNAME=$(basename $SCRIPT_FULL_NAME)
+
+repos=$(find . -xdev -name .hg | grep -v /patches/ | sed -e 's/\.hg//')
+
+for repo in $repos; do
+  # echo "$repo"
+  (cd "$repo" && $MYDIR/hgstat $@)
+done
+
