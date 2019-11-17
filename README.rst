@@ -1,13 +1,17 @@
 ======
 hgstat
 ======
-Simple shell script to display the overall state of a mercurial repository
 
-Usage
------
+A Simple shell script to display the overall state of a mercurial repository
 
-All command line options except the following are
-passed to the 'hg' commands::
+Usage of hgstat
+---------------
+
+hgstat is invoked with::
+
+  hgstat [OPTIONS]
+
+All OPTIONS except the following ones are passed to the 'hg' command::
 
   -h : this help
   -R DIRECTORY : 
@@ -23,3 +27,17 @@ passed to the 'hg' commands::
        do not check remote mq repo even if local mq repo exists
   --debug :
        set tracing on
+
+Usage of hgstatall
+------------------
+
+This is script calls hgstat for all mercurial scripts that it finds in and below the current working directory.
+
+Usage::
+
+  hgstatall [OPTIONS]
+  
+All OPTIONS given are passed to the "hgstat" command. See "hgstat" above.
+
+  
+
