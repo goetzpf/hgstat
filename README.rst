@@ -39,5 +39,45 @@ Usage::
   
 All OPTIONS given are passed to the "hgstat" command. See "hgstat" above.
 
+Example
+-------
+
+Sample output (the actual output is with colors)::
+
+  =================================================
+  Repository in /home/goetz/shared/repos/vimwiki
+  -------------------------------------------------
+  uncomitted (hg status):
+  M Bookmarks.wiki
+  M Keyboard shortcuts.wiki
+  ? index.wiki.orig
+  -------------------------------------------------
+  applied patches (hg qapplied):
+  -------------------------------------------------
+  unapplied patches (hg qunapplied):
+
+  -------------------------------------------------
+  outgoing mq repository patches (hg outgoing):
+  comparing with ssh://goetzp@devel.home/shared/repos/vimwiki/.hg/patches       
+  searching for changes
+  no changes found
+  -------------------------------------------------
+  incoming mq repository patches (hg incoming):
+  comparing with ssh://goetzp@devel.home/shared/repos/vimwiki/.hg/patches       
+  searching for changes
+  no changes found
+  -------------------------------------------------
+  outgoing patches (hg outgoing):
+  comparing with ssh://goetzp@devel.home/shared/repos/vimwiki       
+  searching for changes
+  no changes found
+  -------------------------------------------------
+  incoming patches (hg incoming):
+  comparing with ssh://goetzp@devel.home/shared/repos/vimwiki       
+  searching for changes
+  no changes found
+  =================================================
+
+
   
 
