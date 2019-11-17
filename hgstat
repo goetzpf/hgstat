@@ -1,0 +1,296 @@
+#!/bin/bash
+
+# Note: color setting info taken from:
+# https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux
+
+black=`tput setaf 0`
+red=`tput setaf 1`
+green=`tput setaf 2`
+yellow=`tput setaf 3`
+blue=`tput setaf 4`
+magenta=`tput setaf 5`
+cyan=`tput setaf 6`
+white=`tput setaf 7`
+reset=`tput sgr0`
+# setaf [n]: set foreground color
+# setab [n]: set background color
+
+# separating lines: magenta
+# important warnings: red
+# less important warnings: cyan
+# messages about patches: blue
+
+# outgoing patches: blue
+# incoming patches: green
+
+# example:
+# echo "${red}red text ${green}green text${reset}"
+
+function HELP {
+    me=`basename $0`
+    echo "$me - give an overview of the state of an mercurial repository"
+    echo
+    echo "all command line options except the following are"
+    echo "passed to the 'hg' commands:"
+    echo "-h : this help"
+    echo "-R DIRECTORY : "
+    echo "     operate on repository in DIRECTORY"
+    echo "-l --local : local mode, do not check for incoming and outgoing patches"
+    echo "-b --brief : just check if there are uncomitted/incoming/outgoing patches"
+    echo "     omit any details"
+    echo "-r REPO :"
+    echo "     define the full URL/PATH of a remote repository"
+    echo "--rmq REPO :"
+    echo "     define the full URL/PATH of a remote mq repository"
+    echo "--lmq :"
+    echo "     do not check remote mq repo even if local mq repo exists"
+    echo "--debug :"
+    echo "     set tracing on"
+    exit 0
+}
+
+function is_identifier {
+    # return $
+    echo "$1" | grep -q '^[A-Za-z0-9_-]\+$' 2>/dev/null
+    return $?
+}
+
+declare -a ARGS
+
+REPODIR=""
+
+REMOTE_ALIAS=" "
+REMOTE_REPO=" "
+REMOTE_MQ_ALIAS=" "
+REMOTE_MQ_REPO=" "
+
+JUST_CHECK=""
+MQ_MESSAGE=""
+
+while true; do
+    case "$1" in
+        -h | --help )
+            HELP;
+            shift
+            ;;
+        -R )
+            shift
+            REPODIR="$1"
+            shift
+            ;;
+        -l | --local )
+            REMOTE_ALIAS=""
+            REMOTE_REPO=""
+            REMOTE_MQ_ALIAS=""
+            REMOTE_MQ_REPO=""
+            shift
+            ;;
+        -b | --brief )
+            JUST_CHECK="yes"
+            shift
+            ;;
+        -r )
+            shift
+            if is_identifier "$1"; then 
+                REMOTE_ALIAS="$1"
+                REMOTE_REPO=""
+            else
+                REMOTE_ALIAS=""
+                REMOTE_REPO="$1"
+            fi
+            shift
+            ;;
+        --rmq )
+            shift
+            if is_identifier "$1"; then 
+                REMOTE_MQ_ALIAS="$1"
+                REMOTE_MQ_REPO=""
+            else
+                REMOTE_MQ_ALIAS=""
+                REMOTE_MQ_REPO="$1"
+            fi
+            shift
+            ;;
+        --lmq )
+            REMOTE_MQ_ALIAS=""
+            REMOTE_MQ_REPO=""
+            shift
+            ;;
+        --debug )
+            set -x
+            shift
+            ;;
+    -- ) shift; break ;;
+    * ) 
+            if [ -z "$1" ]; then
+                break;
+            fi
+            ARGS+=("$1")
+            shift
+            ;;
+  esac
+done
+
+if [ -n "$REPODIR" ]; then
+    if [ ! -d "$REPODIR" ]; then
+        echo "error: $REPODIR doesn't exist or is not a directory" >&2
+        exit 1
+    fi
+    cd "$REPODIR"
+fi
+
+if [ ! -d .hg ]; then
+    echo "ERROR, no mercurial repository (directory '.hg') found in directory" >&2
+    exit 1
+fi
+
+if [ "$REMOTE_REPO" = " " ]; then
+    # must use default remote repo
+    REMOTE_ALIAS="default"
+    REMOTE_REPO=""
+fi
+
+if [ ! -d ".hg/patches/.hg" ]; then
+    REMOTE_MQ_ALIAS=""
+    REMOTE_MQ_REPO=""
+else
+    # mq repo exists
+    if [ "$REMOTE_MQ_REPO" = " " ]; then
+        # derive from REMOTE_REPO
+        if [ -n "$REMOTE_ALIAS" ]; then
+            REMOTE_MQ_ALIAS="$REMOTE_ALIAS"
+            REMOTE_MQ_REPO=""
+        else
+            REMOTE_MQ_REPO="$REMOTE_REPO/.hg/patches"
+            REMOTE_MQ_ALIAS=""
+        fi
+    fi
+fi
+
+if [ -n "$REMOTE_ALIAS" ]; then
+    # find repo from alias
+    REMOTE_REPO=$(hg paths "$REMOTE_ALIAS" 2>&1)
+    if [ $? -ne 0 ]; then
+        echo "error: '$REMOTE_ALIAS' not defined in .hg/hgrc" >&2
+        exit 1
+    fi
+fi
+
+if [ -n "$REMOTE_MQ_ALIAS" ]; then
+    # find repo from alias
+    REMOTE_MQ_REPO=$(hg paths "$REMOTE_MQ_ALIAS" --mq 2>&1)
+    if [ $? -ne 0 ]; then
+        if [ "$REMOTE_MQ_ALIAS" = "$REMOTE_ALIAS" ]; then
+            # no "default" in hgrc, treat this as a non fatal error
+            MQ_MESSAGE="${cyan}note: alias '$REMOTE_MQ_ALIAS' not defined in mq repo"
+            REMOTE_MQ_REPO=""
+            REMOTE_MQ_ALIAS=""
+        else
+            echo "error: '$REMOTE_MQ_ALIAS' not defined in .hg/patches/.hg/hgrc" >&2
+            exit 1
+        fi
+    fi
+fi
+
+echo -n "${magenta}"
+echo "================================================="
+echo -n "${reset}"
+echo "Repository in $(pwd)"
+IDENT=$(hg identify --id | sed -e 's/+$//')
+HEADS=$(hg heads -T '{node|short} ')
+if ! echo "$HEADS" | grep -q $IDENT; then
+    if [ -z "$JUST_CHECK" ]; then
+        echo "-------------------------------------------------"
+    fi
+    echo "${red}WORKING COPY IS NOT A HEAD REVISION${reset}"
+fi
+
+if [ -n "$JUST_CHECK" ]; then
+    CHANGES=$(hg status -m -a -r -d | wc -l)
+    if [ "$CHANGES" -ne 0 ]; then
+        echo "${red}uncomitted changes${reset}"
+    fi
+else
+    echo "-------------------------------------------------"
+    echo "uncomitted (hg status):"
+    hg status $@
+fi
+
+if [ -d .hg/patches ]; then
+    if [ -n "$JUST_CHECK" ]; then
+        PATCHES=$(hg qapplied | wc -l)
+        if [ "$PATCHES" -ne 0 ]; then
+            echo "${blue}applied patches${reset}"
+        fi
+    else
+        echo "-------------------------------------------------"
+        echo "applied patches (hg qapplied):"
+        echo -n "${blue}"
+        hg qapplied $@
+        echo -n "${reset}"
+
+        echo "-------------------------------------------------"
+        echo "unapplied patches (hg qunapplied):"
+        hg qunapplied $@
+    fi
+    if [ -n "MQ_MESSAGE" ]; then
+        echo "$MQ_MESSAGE"
+    fi
+    if [ -n "$REMOTE_MQ_REPO" ]; then 
+        if [ -n "$JUST_CHECK" ]; then
+            OUTGOING=$(hg -R .hg/patches outgoing $REMOTE_MQ_REPO -q $@ >/dev/null)
+            if [ $? -eq 0 ]; then
+                echo "${blue}outgoing mq repository patches${reset}"
+            fi
+        else
+            echo "-------------------------------------------------"
+            echo "outgoing mq repository patches (hg outgoing):"
+            echo -n "${blue}"
+            hg -R .hg/patches outgoing $REMOTE_MQ_REPO $@
+            echo -n "${reset}"
+        fi
+        if [ -n "$JUST_CHECK" ]; then
+            INCOMING=$(hg -R .hg/patches incoming $REMOTE_MQ_REPO -q $@ >/dev/null)
+            if [ $? -eq 0 ]; then
+                echo "${blue}incoming mq repository patches${reset}"
+            fi
+        else
+            echo "-------------------------------------------------"
+            echo "incoming mq repository patches (hg incoming):"
+            echo -n "${green}"
+            hg -R .hg/patches incoming $REMOTE_MQ_REPO $@
+            echo -n "${reset}"
+        fi
+    fi
+fi
+
+if [ -n "$REMOTE_REPO" ]; then
+    if [ -n "$JUST_CHECK" ]; then
+        OUTGOING=$(hg outgoing $REMOTE_REPO -q $@ >/dev/null)
+        if [ $? -eq 0 ]; then
+            echo "${blue}outgoing patches${reset}"
+        fi
+    else
+        echo "-------------------------------------------------"
+        echo "outgoing patches (hg outgoing):"
+        echo -n "${blue}"
+        hg outgoing $REMOTE_REPO $@
+        echo -n "${reset}"
+    fi
+    if [ -n "$JUST_CHECK" ]; then
+        INCOMING=$(hg incoming $REMOTE_REPO -q $@ >/dev/null)
+        if [ $? -eq 0 ]; then
+            echo "${green}incoming patches${reset}"
+        fi
+    else
+        echo "-------------------------------------------------"
+        echo "incoming patches (hg incoming):"
+        echo -n "${green}"
+        hg incoming $REMOTE_REPO $@
+        echo -n "${reset}"
+    fi
+fi
+
+echo -n "${magenta}"
+echo "================================================="
+echo -n "${reset}"
