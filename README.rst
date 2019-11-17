@@ -2,7 +2,20 @@
 hgstat
 ======
 
-A Simple shell script to display the overall state of a mercurial repository
+A Simple shell script to display the overall state of a mercurial repository.
+
+The script also handles mq patches and mq patch repositories (see mercurial patch queue
+documentation).
+
+This script shows:
+
+- files unknown to the repository
+- changed files
+- outgoing patches
+- incoming patches
+- applied mq patches
+- incoming patches of the mq repository
+- outgoing patches of the mq repositoty
 
 Usage of hgstat
 ---------------
